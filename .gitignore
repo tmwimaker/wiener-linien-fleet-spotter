@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# YOLO / Ultralytics
+runs/
+*.pt
+*.onnx
+*.torchscript
+*.tflite
+*.pb
+
+# Data (large files — use DVC or Roboflow)
+data/raw/
+data/annotated/
+data/augmented/
+
+# Streamlit
+.streamlit/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
