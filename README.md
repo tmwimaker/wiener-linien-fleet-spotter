@@ -23,7 +23,7 @@ Der **Wiener Linien Fleet Spotter** ist ein prototypisches Computer-Vision-Syste
 
 ---
 
-## Schnellstar
+## Schnellstart
 
 ### Voraussetzungen
 
