@@ -1,28 +1,18 @@
 # Wiener Linien Fleet Spotter - YOLO Dataset Configuration
-# Place this file at: data/dataset.yaml
 
-path: ../data          # root directory (relative to train.py)
-train: annotated/train/images
-val:   annotated/val/images
-test:  annotated/test/images
+path: /Users/tomwiesemann/Documents/wiener-linien-fleet-spotter/data/annotated
+train: train/images
+val:   valid/images
+test:  test/images
 
 # Number of classes
 nc: 6
 
 # Class names — ordered by index (0–5)
 names:
-  0: E2-Tram          # Hochflur-Straßenbahn, klassisches eckiges Design, oft mit Beiwagen
-  1: ULF              # Ultra Low Floor, abgerundete graue Frontpartie
-  2: Flexity          # Modernes Niederflurfahrzeug, LED-Anzeigen, futuristisch
-  3: Silberpfeil      # U-Bahn, unlackiertes Aluminium, kantige Front
-  4: V-Wagen          # U-Bahn, rot-weiß, durchgängig begehbar
-  5: X-Wagen          # U-Bahn, vollautomatisch, L-förmige LED-Signatur
-
-# Visual class descriptions (for documentation / UI display)
-descriptions:
-  E2-Tram:     "Hochflurige Straßenbahn (Bj. 1978–1990), eckiges traditionelles Design"
-  ULF:         "Ultra Low Floor Tram (ab 2000), charakteristische runde graue Frontpartie"
-  Flexity:     "Niederflur-Flexity Wien (ab 2018), futuristisch, breite LED-Zielanzeige"
-  Silberpfeil: "U-Bahn-Reihe U (bis 2020er Betrieb), silber-aluminium, kantige Front"
-  V-Wagen:     "U-Bahn-Reihe V (ab 2000), rot-weiße Front, vollständig begehbar"
-  X-Wagen:     "U-Bahn-Reihe X (ab 2024), fahrerlos, L-förmige LED-Scheinwerfer"
+  0: E2-Tram
+  1: ULF
+  2: Flexity
+  3: Silberpfeil
+  4: V-Wagen
+  5: X-Wagen

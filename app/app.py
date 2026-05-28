@@ -140,13 +140,16 @@ with st.sidebar:
     show_conf   = st.checkbox("Konfidenz anzeigen", value=True)
 
     st.divider()
-    st.markdown("### 🚋 Zielklassen")
     for name, info in CLASS_INFO.items():
+        badge_color = info.get("color", "#333")
+        badge_emoji = info.get("emoji", "🚌")
+        badge_cat   = info.get("category", "")
+        badge_desc  = info.get("desc", "")
         st.markdown(
-            f"<span class='class-badge' style='background:{info[\"color\"]}'>"
-            f"{info['emoji']} {name}</span>&nbsp;"
-            f"<small style='color:#6c757d'>{info['category']}</small><br>"
-            f"<small>{info['desc']}</small>",
+            f"<span class='class-badge' style='background:{badge_color}'>"
+            f"{badge_emoji} {name}</span>&nbsp;"
+            f"<small style='color:#6c757d'>{badge_cat}</small><br>"
+            f"<small>{badge_desc}</small>",
             unsafe_allow_html=True,
         )
         st.markdown("")
@@ -172,7 +175,7 @@ def load_model():
     # Try trained weights first, fall back to base model for demo
     trained = (
         Path(__file__).parent.parent
-        / "model" / "runs" / "fleet_spotter_v1" / "weights" / "best.pt"
+        / "model" / "runs" / "fleet_spotter_v1-2" / "weights" / "best.pt"
     )
     if trained.exists():
         return YOLO(str(trained)), True
