@@ -1,18 +1,14 @@
-# Wiener Linien Fleet Spotter - YOLO Dataset Configuration
-
 path: /Users/tomwiesemann/Documents/wiener-linien-fleet-spotter/data/annotated
 train: train/images
 val:   valid/images
 test:  test/images
 
-# Number of classes
 nc: 6
 
-# Class names — ordered by index (0–5)
 names:
   0: E2-Tram
-  1: ULF
-  2: Flexity
-  3: Silberpfeil
+  1: Flexity
+  2: Silberpfeil
+  3: ULF
   4: V-Wagen
   5: X-Wagen

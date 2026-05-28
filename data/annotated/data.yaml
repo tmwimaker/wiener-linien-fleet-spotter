@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 6
+names: ['E2-Tram', 'Flexity', 'Silberpfeil', 'ULF', 'V-Wagen', 'X-Wagen']
+
+roboflow:
+  workspace: tom-wiesemann
+  project: wiener-linien-fleet-spotter
+  version: 1
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/tom-wiesemann/wiener-linien-fleet-spotter/dataset/1

@@ -23,10 +23,10 @@ runs/
 *.tflite
 *.pb
 
-# Data (large files — use DVC or Roboflow)
+# Data (large files — use DV
 data/raw/
-data/annotated/
-data/augmented/
+# data/annotated/
+# data/augmented/
 
 # Streamlit
 .streamlit/
