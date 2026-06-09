@@ -1,8 +1,10 @@
 # Wiener Linien Fleet Spotter - Dependencies
 # Core ML
 ultralytics==8.2.18
-torch>=2.0.0
-torchvision>=0.15.0
+# <2.6 pin: torch 2.6 flipped torch.load's weights_only default to True,
+# which breaks ultralytics==8.2.18's checkpoint loading (UnpicklingError)
+torch>=2.0.0,<2.6
+torchvision>=0.15.0,<0.21
 
 # Web UI
 streamlit==1.35.0

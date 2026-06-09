@@ -16,14 +16,16 @@ env/
 .ipynb_checkpoints/
 
 # YOLO / Ultralytics
-runs/
 *.pt
 *.onnx
 *.torchscript
 *.tflite
 *.pb
+# Track only the committed baseline weights
+!model/runs/fleet_spotter_baseline/weights/best.pt
+data/**/*.cache
 
-# Data (large files — use DV
+# Data (large files — use DVC or download separately)
 data/raw/
 # data/annotated/
 # data/augmented/
@@ -34,8 +36,12 @@ data/raw/
 # OS
 .DS_Store
 Thumbs.db
+desktop.ini
 
 # IDE
 .idea/
 .vscode/
 *.swp
+
+# Claude Code (AI assistant context)
+.claude/

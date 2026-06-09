@@ -1,7 +1,6 @@
-path: /Users/tomwiesemann/Documents/wiener-linien-fleet-spotter/data/annotated
-train: train/images
-val:   valid/images
-test:  test/images
+train: annotated/train/images
+val:   annotated/valid/images
+test:  annotated/test/images
 
 nc: 6
 

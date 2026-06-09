@@ -5,18 +5,17 @@ Runs the trained model on the test split and prints / saves a full report
 including per-class AP, confusion matrix, and F1 curve.
 
 Usage:
-    python scripts/evaluate.py [--weights model/runs/fleet_spotter_v1/weights/best.pt]
+    python scripts/evaluate.py [--weights model/runs/fleet_spotter_baseline/weights/best.pt]
 """
 
 import argparse
 from pathlib import Path
-import matplotlib.pyplot as plt
 from ultralytics import YOLO
 
 
 ROOT      = Path(__file__).resolve().parent.parent
 DATA_YAML = ROOT / "data" / "dataset.yaml"
-DEFAULT_W = ROOT / "model" / "runs" / "fleet_spotter_v1" / "weights" / "best.pt"
+DEFAULT_W = ROOT / "model" / "runs" / "fleet_spotter_baseline" / "weights" / "best.pt"
 
 
 def parse_args():

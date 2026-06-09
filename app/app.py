@@ -8,7 +8,10 @@ Run:
 """
 
 import io
+from datetime import datetime
 from pathlib import Path
+
+import yaml
 
 import streamlit as st
 from PIL import Image
@@ -129,15 +132,58 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
+# ── Trained-run discovery ─────────────────────────────────────────────────────
+RUNS_DIR = Path(__file__).parent.parent / "model" / "runs"
+
+
+def list_trained_runs():
+    """Available training runs with saved weights, newest first."""
+    return sorted(
+        RUNS_DIR.glob("*/weights/best.pt"),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+
+
+def run_label(weights_path):
+    args_file = weights_path.parent.parent / "args.yaml"
+    run_name = weights_path.parent.parent.name
+    date_str = datetime.fromtimestamp(weights_path.stat().st_mtime).strftime("%d.%m.%Y")
+    if args_file.exists():
+        with open(args_file) as f:
+            a = yaml.safe_load(f)
+        model = str(a.get("model", "?")).replace(".pt", "")
+        epochs = a.get("epochs", "?")
+        batch = a.get("batch", "?")
+        return f"{run_name}  ·  {model}, {epochs} ep, batch {batch}  ·  {date_str}"
+    return f"{run_name}  ·  {date_str}"
+
+
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("## ⚙️ Einstellungen")
+
+    trained_runs = list_trained_runs()
+    run_choices = {run_label(w): w for w in trained_runs}
+    demo_label = "🧪 Demo (Basis-YOLOv8n, untrainiert)"
+    run_labels = [demo_label] + list(run_choices.keys())
+    selected_run = st.selectbox(
+        "Trainings-Run", run_labels,
+        index=1 if run_choices else 0,
+        help="Wähle, welches trainierte Modell für die Erkennung verwendet werden soll.",
+    )
+    weights_path = run_choices.get(selected_run)
+
+    st.divider()
     conf_thresh = st.slider("Konfidenz-Schwellwert", 0.1, 0.95, 0.30, 0.05,
                             help="Mindestvertrauen für eine Erkennung")
-    iou_thresh  = st.slider("IoU-Schwellwert (NMS)", 0.1, 0.9, 0.45, 0.05,
-                            help="Non-Maximum Suppression Overlap-Grenze")
+    iou_thresh = st.slider("IoU-Schwellwert (NMS)", 0.1, 0.9, 0.45, 0.05,
+                           help="Non-Maximum Suppression Overlap-Grenze")
     show_labels = st.checkbox("Labels auf Bild anzeigen", value=True)
-    show_conf   = st.checkbox("Konfidenz anzeigen", value=True)
+    show_conf = st.checkbox("Konfidenz anzeigen", value=True)
+    show_cam = st.checkbox("🔥 Erklärbarkeits-Heatmap anzeigen", value=False,
+                           help="Visualisiert per EigenCAM, welche Bildregionen die "
+                                "stärksten Aktivierungen im Modell auslösen.")
 
     st.divider()
     for name, info in CLASS_INFO.items():
@@ -170,20 +216,50 @@ st.divider()
 
 # ── Model loading ─────────────────────────────────────────────────────────────
 @st.cache_resource(show_spinner="🧠 Modell wird geladen …")
-def load_model():
+def load_model(weights_path):
     from ultralytics import YOLO
-    # Try trained weights first, fall back to base model for demo
-    trained = (
-        Path(__file__).parent.parent
-        / "model" / "runs" / "fleet_spotter_v1-2" / "weights" / "best.pt"
-    )
-    if trained.exists():
-        return YOLO(str(trained)), True
-    else:
+    if weights_path is None:
         return YOLO("yolov8n.pt"), False   # demo mode
+    return YOLO(str(weights_path)), True
 
 
-model, is_trained = load_model()
+model, is_trained = load_model(weights_path)
+
+
+# ── Explainability (EigenCAM) ─────────────────────────────────────────────────
+def compute_eigencam(yolo_model, img_rgb, layer_index=-14):
+    """Highlights the regions that drive the backbone's strongest feature
+    activations via the principal component of its activation maps (EigenCAM).
+    Needs no backprop, which makes it robust for detection models like YOLO.
+    """
+    target_layer = yolo_model.model.model[layer_index]
+    captured = []
+
+    def hook(_module, _inp, out):
+        captured.append(out.detach().cpu().numpy())
+
+    handle = target_layer.register_forward_hook(hook)
+    try:
+        yolo_model.predict(source=img_rgb, verbose=False)
+    finally:
+        handle.remove()
+
+    if not captured:
+        return None
+
+    fmap = captured[0][0]                          # (C, H, W)
+    flat = fmap.reshape(fmap.shape[0], -1).T       # (H*W, C)
+    flat = flat - flat.mean(axis=0)
+    _, _, vt = np.linalg.svd(flat, full_matrices=True)
+    cam = (flat @ vt[0]).reshape(fmap.shape[1:])   # (H, W)
+
+    cam -= cam.min()
+    cam /= (cam.max() + 1e-8)
+    cam = cv2.resize(cam, (img_rgb.shape[1], img_rgb.shape[0]))
+
+    heatmap = cv2.applyColorMap(np.uint8(255 * cam), cv2.COLORMAP_JET)
+    heatmap = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB)
+    return cv2.addWeighted(img_rgb, 0.55, heatmap, 0.45, 0)
 
 if not is_trained:
     st.warning(
@@ -208,7 +284,7 @@ if uploaded:
 
     with col_orig:
         st.markdown("#### 📷 Original")
-        st.image(pil_img, use_container_width=True)
+        st.image(pil_img, use_column_width=True)
 
     with st.spinner("🔍 Erkenne Fahrzeuge …"):
         results = model.predict(
@@ -225,7 +301,20 @@ if uploaded:
 
     with col_result:
         st.markdown("#### 🎯 Erkannte Fahrzeuge")
-        st.image(ann_img, use_container_width=True)
+        st.image(ann_img, use_column_width=True)
+
+    if show_cam:
+        with st.spinner("🧠 Berechne Erklärbarkeits-Heatmap …"):
+            cam_img = compute_eigencam(model, img_np)
+        if cam_img is not None:
+            st.divider()
+            st.markdown("### 🔥 Worauf achtet das Modell?")
+            st.image(cam_img, use_column_width=True)
+            st.caption(
+                "Die Heatmap (EigenCAM) zeigt, welche Bildregionen die stärksten "
+                "Aktivierungen im Backbone des Modells auslösen – ein Blick in die "
+                "„Gedanken“ des neuronalen Netzes."
+            )
 
     st.divider()
     st.markdown("### 📋 Erkennungs-Details")
