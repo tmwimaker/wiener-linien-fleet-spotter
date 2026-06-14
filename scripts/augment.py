@@ -30,7 +30,7 @@ def build_pipeline():
         A.HueSaturationValue(hue_shift_limit=10, sat_shift_limit=30, val_shift_limit=20, p=0.5),
         A.GaussNoise(var_limit=(10, 50), p=0.4),
         A.MotionBlur(blur_limit=7, p=0.3),   # simulates moving tram
-        A.RandomRain(p=0.2),                  # Viennese weather 🌧️
+        A.RandomRain(p=0.2),                  # Viennese weather
         A.RandomFog(p=0.15),
         A.RandomShadow(p=0.3),
         A.HorizontalFlip(p=0.5),
@@ -99,14 +99,14 @@ def main():
     images = list(in_img.glob("*.jpg")) + list(in_img.glob("*.png"))
     pipeline = build_pipeline()
 
-    print(f"\n🔧  Augmenting {len(images)} images × {args.factor} copies …")
+    print(f"\nAugmenting {len(images)} images x {args.factor} copies …")
     for img_path in tqdm(images):
         lbl_path = in_lbl / (img_path.stem + ".txt")
         for i in range(args.factor):
             augment_image(img_path, lbl_path, pipeline, img_out, lbl_out, suffix=i)
 
     total = len(list(img_out.glob("*")))
-    print(f"✅  Done — {total} images in {out_dir}")
+    print(f"Done — {total} images in {out_dir}")
 
 
 if __name__ == "__main__":

@@ -82,7 +82,7 @@ def main():
 
     # Save best weights path for easy reference
     best = RUNS_DIR / args.name / "weights" / "best.pt"
-    print(f"\n✅  Training complete!")
+    print(f"\nTraining complete!")
     print(f"   Best weights: {best}")
     print(f"   mAP50:        {results.results_dict.get('metrics/mAP50(B)', 'N/A'):.4f}")
     print(f"   mAP50-95:     {results.results_dict.get('metrics/mAP50-95(B)', 'N/A'):.4f}")

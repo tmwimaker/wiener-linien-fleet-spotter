@@ -1,4 +1,4 @@
-# 🚋 Wiener Linien Fleet Spotter
+# Wiener Linien Fleet Spotter
 
 > **KI-gestützte Erkennung und Klassifizierung von Wiener Straßenbahnen & U-Bahnen**
 >
@@ -14,12 +14,12 @@ Der **Wiener Linien Fleet Spotter** ist ein prototypisches Computer-Vision-Syste
 
 | Klasse | Typ | Beschreibung |
 |---|---|---|
-| `E2-Tram` | 🚃 Straßenbahn | Hochflur-Klassiker (Bj. 1978–1990), eckiges Design, oft mit Beiwagen |
-| `ULF` | 🚋 Straßenbahn | Ultra Low Floor, charakteristische runde graue Front (ab 2000) |
-| `Flexity` | 🚊 Straßenbahn | Modernes Niederflurfahrzeug mit LED-Anzeigen (ab 2018) |
-| `Silberpfeil` | 🚇 U-Bahn | Unlackierte Aluminium-Optik, kantige Front (ab 1978) |
-| `V-Wagen` | 🚄 U-Bahn | Rot-weiß, durchgängig begehbar (ab 2000) |
-| `X-Wagen` | 🤖 U-Bahn | Vollautomatisch, L-förmige LED-Signatur (ab 2024) |
+| `E2-Tram` | Straßenbahn | Hochflur-Klassiker (Bj. 1978–1990), eckiges Design, oft mit Beiwagen |
+| `ULF` | Straßenbahn | Ultra Low Floor, charakteristische runde graue Front (ab 2000) |
+| `Flexity` | Straßenbahn | Modernes Niederflurfahrzeug mit LED-Anzeigen (ab 2018) |
+| `Silberpfeil` | U-Bahn | Unlackierte Aluminium-Optik, kantige Front (ab 1978) |
+| `V-Wagen` | U-Bahn | Rot-weiß, durchgängig begehbar (ab 2000) |
+| `X-Wagen` | U-Bahn | Vollautomatisch, L-förmige LED-Signatur (ab 2024) |
 
 ---
 
@@ -54,6 +54,8 @@ streamlit run app/app.py
 
 Browser öffnet sich automatisch auf `http://localhost:8501`.
 Ein Bild hochladen → Fahrzeuge werden erkannt und klassifiziert.
+
+In der Seitenleiste lässt sich zusätzlich eine **Erklärbarkeits-Heatmap** (Grad-CAM) einblenden: Für jedes erkannte Fahrzeug wird per Backpropagation ermittelt, welche Bildbereiche am stärksten für seine vorhergesagte Klasse gesprochen haben – also die tatsächliche Evidenz hinter der Entscheidung. Dargestellt als Entscheidungs-Overlay und reine Heatmap, inklusive Konturmarkierung der einflussreichsten Bereiche und einstellbarer Intensität.
 
 > **Hinweis:** Ohne trainiertes Modell läuft die App im *Demo-Modus* mit einem allgemeinen YOLOv8-Modell. Die Wiener-Linien-Klassen werden erst nach dem Training erkannt.
 
@@ -155,7 +157,7 @@ wiener-linien-fleet-spotter/
 
 ## Team
 
-Vierergruppe, Universitätskurs „Machine Learning", Wintersemester 2025/26
+Vierergruppe, Universitätskurs „Machine Learning", Sommersemester 2026
 
 ---
 

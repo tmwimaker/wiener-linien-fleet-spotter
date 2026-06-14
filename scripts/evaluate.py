@@ -31,7 +31,7 @@ def main():
     args = parse_args()
     weights = Path(args.weights)
     if not weights.exists():
-        print(f"❌  Weights not found: {weights}")
+        print(f"Error: weights not found: {weights}")
         print("   Train the model first:  python scripts/train.py")
         return
 
@@ -85,7 +85,7 @@ def main():
         for i, name in enumerate(class_names):
             ap50 = metrics.box.ap50[i] if hasattr(metrics.box, 'ap50') else 0
             f.write(f"  {name}: {ap50:.4f}\n")
-    print(f"✅  Report saved: {report_path}")
+    print(f"Report saved: {report_path}")
 
 
 if __name__ == "__main__":

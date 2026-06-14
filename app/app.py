@@ -17,11 +17,11 @@ import streamlit as st
 from PIL import Image
 import numpy as np
 import cv2
+import torch
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Wiener Linien Fleet Spotter",
-    page_icon="🚋",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -29,42 +29,36 @@ st.set_page_config(
 # ── Class metadata ────────────────────────────────────────────────────────────
 CLASS_INFO = {
     "E2-Tram": {
-        "emoji": "🚃",
         "color": "#E63946",
         "category": "Straßenbahn",
         "desc": "Hochflur-Straßenbahn, Bj. 1978–1990. Eckiges, traditionelles Design – oft mit Beiwagen unterwegs.",
         "fun_fact": "Die E2 ist der Klassiker der Wiener Bim und wird als fahrendes Denkmal geschätzt.",
     },
     "ULF": {
-        "emoji": "🚋",
         "color": "#457B9D",
         "category": "Straßenbahn",
         "desc": "Ultra Low Floor Tram, ab 2000. Unverwechselbare abgerundete graue Frontpartie.",
         "fun_fact": "Der ULF war beim Launch eines der niedrigflursten Fahrzeuge weltweit – ideal für barrierefreies Einsteigen.",
     },
     "Flexity": {
-        "emoji": "🚊",
         "color": "#2A9D8F",
         "category": "Straßenbahn",
         "desc": "Flexity Wien, ab 2018. Futuristisches Design mit markanten LED-Zielanzeigen.",
         "fun_fact": "Der Flexity ersetzt schrittweise die alten E2-Garnituren und bietet WLAN und USB-Ladebuchsen.",
     },
     "Silberpfeil": {
-        "emoji": "🚇",
         "color": "#6C757D",
         "category": "U-Bahn",
         "desc": "U-Bahn Reihe U, unlackierte Aluminium-Optik, kantige Front. Ein Stück Wiener Technikgeschichte.",
         "fun_fact": "Der Silberpfeil ist seit 1978 im Einsatz – und war in den 1970ern hochmodern.",
     },
     "V-Wagen": {
-        "emoji": "🚄",
         "color": "#C1121F",
         "category": "U-Bahn",
         "desc": "U-Bahn Reihe V, ab 2000. Rot-weiße Front, vollständig durchgängig begehbar.",
         "fun_fact": "Die V-Wagen sind die häufigsten U-Bahn-Fahrzeuge in Wien und decken fast alle Linien ab.",
     },
     "X-Wagen": {
-        "emoji": "🤖",
         "color": "#7209B7",
         "category": "U-Bahn",
         "desc": "U-Bahn Reihe X, ab 2024. Vollautomatisch, fahrerlos, mit markanter L-förmiger LED-Scheinwerfersignatur.",
@@ -159,13 +153,23 @@ def run_label(weights_path):
     return f"{run_name}  ·  {date_str}"
 
 
+# ── Grad-CAM detail-level options ─────────────────────────────────────────────
+# Feature maps feeding the Detect head (strides 8/16/32 → P3/P4/P5).
+CAM_LEVEL_OPTIONS = {
+    "Kombiniert (P3+P4+P5)": (0, 1, 2),
+    "Fein (P3, 80×80)": (0,),
+    "Mittel (P4, 40×40)": (1,),
+    "Grob (P5, 20×20)": (2,),
+}
+
+
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("## ⚙️ Einstellungen")
+    st.markdown("## Einstellungen")
 
     trained_runs = list_trained_runs()
     run_choices = {run_label(w): w for w in trained_runs}
-    demo_label = "🧪 Demo (Basis-YOLOv8n, untrainiert)"
+    demo_label = "Demo (Basis-YOLOv8n, untrainiert)"
     run_labels = [demo_label] + list(run_choices.keys())
     selected_run = st.selectbox(
         "Trainings-Run", run_labels,
@@ -181,19 +185,30 @@ with st.sidebar:
                            help="Non-Maximum Suppression Overlap-Grenze")
     show_labels = st.checkbox("Labels auf Bild anzeigen", value=True)
     show_conf = st.checkbox("Konfidenz anzeigen", value=True)
-    show_cam = st.checkbox("🔥 Erklärbarkeits-Heatmap anzeigen", value=False,
-                           help="Visualisiert per EigenCAM, welche Bildregionen die "
-                                "stärksten Aktivierungen im Modell auslösen.")
+    show_cam = st.checkbox("Erklärbarkeits-Heatmap anzeigen", value=False,
+                           help="Visualisiert per Grad-CAM, welche Bildbereiche eines "
+                                "erkannten Fahrzeugs am stärksten für seine vorhergesagte "
+                                "Klasse sprechen.")
+    cam_alpha = st.slider("Heatmap-Intensität", 0.1, 0.9, 0.45, 0.05,
+                          help="Deckkraft der Aktivierungs-Überlagerung",
+                          disabled=not show_cam)
+    cam_level_label = st.selectbox(
+        "Heatmap-Detailgrad", list(CAM_LEVEL_OPTIONS.keys()),
+        help="Welche Feature-Ebene(n) für die Heatmap verwendet werden. "
+             "Feinere Ebenen liefern kleinteiligere, schärfere Hotspots; "
+             "gröbere zeigen großflächigere Bereiche.",
+        disabled=not show_cam,
+    )
+    cam_levels = CAM_LEVEL_OPTIONS[cam_level_label]
 
     st.divider()
     for name, info in CLASS_INFO.items():
         badge_color = info.get("color", "#333")
-        badge_emoji = info.get("emoji", "🚌")
         badge_cat   = info.get("category", "")
         badge_desc  = info.get("desc", "")
         st.markdown(
             f"<span class='class-badge' style='background:{badge_color}'>"
-            f"{badge_emoji} {name}</span>&nbsp;"
+            f"{name}</span>&nbsp;"
             f"<small style='color:#6c757d'>{badge_cat}</small><br>"
             f"<small>{badge_desc}</small>",
             unsafe_allow_html=True,
@@ -205,7 +220,7 @@ with st.sidebar:
 
 
 # ── Header ────────────────────────────────────────────────────────────────────
-st.markdown("<p class='hero-title'>🚋 Wiener Linien Fleet Spotter</p>", unsafe_allow_html=True)
+st.markdown("<p class='hero-title'>Wiener Linien Fleet Spotter</p>", unsafe_allow_html=True)
 st.markdown(
     "<p class='hero-subtitle'>Lade ein Foto hoch – das KI-Modell erkennt und klassifiziert "
     "Straßenbahnen & U-Bahnen der Wiener Linien.</p>",
@@ -215,7 +230,7 @@ st.divider()
 
 
 # ── Model loading ─────────────────────────────────────────────────────────────
-@st.cache_resource(show_spinner="🧠 Modell wird geladen …")
+@st.cache_resource(show_spinner="Modell wird geladen …")
 def load_model(weights_path):
     from ultralytics import YOLO
     if weights_path is None:
@@ -226,47 +241,162 @@ def load_model(weights_path):
 model, is_trained = load_model(weights_path)
 
 
-# ── Explainability (EigenCAM) ─────────────────────────────────────────────────
-def compute_eigencam(yolo_model, img_rgb, layer_index=-14):
-    """Highlights the regions that drive the backbone's strongest feature
-    activations via the principal component of its activation maps (EigenCAM).
-    Needs no backprop, which makes it robust for detection models like YOLO.
+# ── Explainability (Grad-CAM) ─────────────────────────────────────────────────
+# Feature maps feeding the Detect head (strides 8/16/32 → P3/P4/P5).
+_GRADCAM_LAYERS = (15, 18, 21)
+
+
+def compute_gradcam(yolo_model, img_rgb, boxes_xyxy, class_ids, imgsz=640, levels=(0, 1, 2)):
+    """Computes Grad-CAM heatmaps for each detected vehicle.
+
+    For every detection, the predicted class score is backpropagated to the
+    feature maps feeding the detection head. The resulting gradients show
+    which pixels actually *increased the model's confidence in that vehicle's
+    predicted class* — i.e. the real evidence behind the classification, not
+    just generic feature activity. `levels` selects which of the three
+    feature maps (0=P3/fine, 1=P4/medium, 2=P5/coarse) contribute. Each
+    vehicle's map is restricted to its own bounding box; multiple vehicles
+    are combined via a per-pixel maximum. Returns a smoothed map in [0, 1] at
+    image resolution, or None if there is nothing to explain.
     """
-    target_layer = yolo_model.model.model[layer_index]
-    captured = []
-
-    def hook(_module, _inp, out):
-        captured.append(out.detach().cpu().numpy())
-
-    handle = target_layer.register_forward_hook(hook)
-    try:
-        yolo_model.predict(source=img_rgb, verbose=False)
-    finally:
-        handle.remove()
-
-    if not captured:
+    if boxes_xyxy is None or len(boxes_xyxy) == 0:
         return None
 
-    fmap = captured[0][0]                          # (C, H, W)
-    flat = fmap.reshape(fmap.shape[0], -1).T       # (H*W, C)
-    flat = flat - flat.mean(axis=0)
-    _, _, vt = np.linalg.svd(flat, full_matrices=True)
-    cam = (flat @ vt[0]).reshape(fmap.shape[1:])   # (H, W)
+    img_h, img_w = img_rgb.shape[:2]
+    torch_model = yolo_model.model
+    torch_model.eval()
 
-    cam -= cam.min()
-    cam /= (cam.max() + 1e-8)
-    cam = cv2.resize(cam, (img_rgb.shape[1], img_rgb.shape[0]))
+    img_resized = cv2.resize(img_rgb, (imgsz, imgsz))
+    tensor = torch.from_numpy(img_resized).float().permute(2, 0, 1).unsqueeze(0) / 255.0
+    tensor = tensor.to(next(torch_model.parameters()).device)
+    tensor.requires_grad_(True)
 
-    heatmap = cv2.applyColorMap(np.uint8(255 * cam), cv2.COLORMAP_JET)
+    captured = {}
+
+    def make_hook(level):
+        def hook(_module, _inp, out):
+            out.retain_grad()
+            captured[level] = out
+        return hook
+
+    handles = [torch_model.model[layer_idx].register_forward_hook(make_hook(level))
+               for level, layer_idx in enumerate(_GRADCAM_LAYERS)]
+
+    # Anchors/strides cached from a prior inference-mode predict() call can't
+    # be reused inside a graph that needs gradients - force a clean recompute.
+    torch_model.model[-1].shape = None
+
+    try:
+        with torch.enable_grad():
+            y, _ = torch_model(tensor)
+    finally:
+        for handle in handles:
+            handle.remove()
+
+    scale_x, scale_y = imgsz / img_w, imgsz / img_h
+    anchor_cx, anchor_cy = y[0, 0, :], y[0, 1, :]
+
+    cam = np.zeros((img_h, img_w), dtype=np.float32)
+
+    for (x1, y1, x2, y2), cls_id in zip(boxes_xyxy, class_ids):
+        bx1, by1, bx2, by2 = x1 * scale_x, y1 * scale_y, x2 * scale_x, y2 * scale_y
+        mask = (anchor_cx >= bx1) & (anchor_cx <= bx2) & (anchor_cy >= by1) & (anchor_cy <= by2)
+        if not mask.any():
+            continue
+
+        score = y[0, 4 + int(cls_id), :][mask].sum()
+        for t in captured.values():
+            t.grad = None
+        torch_model.zero_grad()
+        score.backward(retain_graph=True)
+
+        box_cam = np.zeros((img_h, img_w), dtype=np.float32)
+        for level, t in captured.items():
+            if level not in levels:
+                continue
+            act = t.detach()[0].numpy()
+            grad = t.grad[0].numpy()
+            weights = grad.mean(axis=(1, 2))
+            level_cam = np.maximum((weights[:, None, None] * act).sum(axis=0), 0)
+            level_cam -= level_cam.min()
+            denom = level_cam.max()
+            if denom > 1e-8:
+                level_cam /= denom
+            level_cam = cv2.resize(level_cam, (img_w, img_h), interpolation=cv2.INTER_CUBIC)
+            box_cam = np.maximum(box_cam, level_cam)
+
+        px1, py1 = int(np.clip(x1, 0, img_w - 1)), int(np.clip(y1, 0, img_h - 1))
+        px2 = int(np.clip(round(x2), px1 + 1, img_w))
+        py2 = int(np.clip(round(y2), py1 + 1, img_h))
+        box_mask = np.zeros((img_h, img_w), dtype=np.float32)
+        box_mask[py1:py2, px1:px2] = 1.0
+        box_cam *= box_mask
+        if box_cam.max() > 1e-8:
+            box_cam /= box_cam.max()
+
+        cam = np.maximum(cam, box_cam)
+
+    cam = cv2.GaussianBlur(cam, (0, 0), sigmaX=max(img_w, img_h) / 200)
+    return np.clip(cam, 0, 1)
+
+
+def render_cam(img_rgb, cam, alpha=0.45, highlight_quantile=0.85):
+    """Turns a raw CAM into a colorized activation map and an overlay with a
+    contour drawn around the strongest-activation region for extra punch."""
+    heatmap = cv2.applyColorMap(np.uint8(255 * cam), cv2.COLORMAP_TURBO)
     heatmap = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB)
-    return cv2.addWeighted(img_rgb, 0.55, heatmap, 0.45, 0)
+
+    overlay = cv2.addWeighted(img_rgb, 1 - alpha, heatmap, alpha, 0)
+
+    hot_mask = (cam >= np.quantile(cam, highlight_quantile)).astype(np.uint8)
+    contours, _ = cv2.findContours(hot_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    cv2.drawContours(overlay, contours, -1, (255, 255, 255), 2)
+
+    return heatmap, overlay
+
+
+# 3x3 grid of region names within a vehicle's bounding box, (row, col) -> label.
+_HOTSPOT_POSITIONS = {
+    (0, 0): "oben links",  (0, 1): "oben",          (0, 2): "oben rechts",
+    (1, 0): "links",       (1, 1): "in der Mitte",  (1, 2): "rechts",
+    (2, 0): "unten links", (2, 1): "unten",         (2, 2): "unten rechts",
+}
+
+
+def describe_hotspot(cam, boxes_xyxy, class_ids, names):
+    """Generates a short sentence naming the vehicle and the region within its
+    bounding box (e.g. "oben rechts") where the Grad-CAM heatmap is hottest -
+    a plain-text translation of what the heatmap shows."""
+    if cam.max() <= 1e-8:
+        return None
+
+    py, px = np.unravel_index(np.argmax(cam), cam.shape)
+
+    for (x1, y1, x2, y2), cls_id in zip(boxes_xyxy, class_ids):
+        if x1 <= px <= x2 and y1 <= py <= y2:
+            col = min(int((px - x1) / max(x2 - x1, 1e-6) * 3), 2)
+            row = min(int((py - y1) / max(y2 - y1, 1e-6) * 3), 2)
+            position = _HOTSPOT_POSITIONS[(row, col)]
+            cls_name = names.get(int(cls_id), f"Klasse {int(cls_id)}")
+            return (
+                f"Die stärkste Evidenz für **{cls_name}** liegt im Bereich "
+                f"**{position}** des Fahrzeugs."
+            )
+
+    return None
+
+
+def colorbar_legend(width=400, height=22):
+    """Horizontal gradient bar matching the CAM colormap, used as a legend."""
+    gradient = np.tile(np.linspace(0, 255, width, dtype=np.uint8), (height, 1))
+    bar = cv2.applyColorMap(gradient, cv2.COLORMAP_TURBO)
+    return cv2.cvtColor(bar, cv2.COLOR_BGR2RGB)
 
 if not is_trained:
     st.warning(
-        "⚠️ **Demo-Modus**: Kein trainiertes Modell gefunden. "
+        "**Demo-Modus**: Kein trainiertes Modell gefunden. "
         "Das Basis-YOLOv8n-Modell ist aktiv — Wiener-Linien-Klassen werden erst nach "
-        "dem Training erkannt. Führe `python scripts/train.py` aus, um das Modell zu trainieren.",
-        icon="⚠️",
+        "dem Training erkannt. Führe `python scripts/train.py` aus, um das Modell zu trainieren."
     )
 
 
@@ -283,10 +413,10 @@ if uploaded:
     col_orig, col_result = st.columns(2, gap="large")
 
     with col_orig:
-        st.markdown("#### 📷 Original")
+        st.markdown("#### Original")
         st.image(pil_img, use_column_width=True)
 
-    with st.spinner("🔍 Erkenne Fahrzeuge …"):
+    with st.spinner("Erkenne Fahrzeuge …"):
         results = model.predict(
             source     = img_np,
             conf       = conf_thresh,
@@ -300,24 +430,62 @@ if uploaded:
     ann_img = cv2.cvtColor(ann_img, cv2.COLOR_BGR2RGB)
 
     with col_result:
-        st.markdown("#### 🎯 Erkannte Fahrzeuge")
+        st.markdown("#### Erkannte Fahrzeuge")
         st.image(ann_img, use_column_width=True)
 
     if show_cam:
-        with st.spinner("🧠 Berechne Erklärbarkeits-Heatmap …"):
-            cam_img = compute_eigencam(model, img_np)
-        if cam_img is not None:
+        if boxes is not None and len(boxes):
+            box_xyxy  = boxes.xyxy.cpu().numpy()
+            class_ids = boxes.cls.cpu().numpy()
+        else:
+            box_xyxy, class_ids = None, None
+
+        with st.spinner("Berechne Erklärbarkeits-Heatmap …"):
+            cam = compute_gradcam(model, img_np, box_xyxy, class_ids, levels=cam_levels)
+        if cam is not None:
+            heatmap_img, overlay_img = render_cam(img_np, cam, alpha=cam_alpha)
+
             st.divider()
-            st.markdown("### 🔥 Worauf achtet das Modell?")
-            st.image(cam_img, use_column_width=True)
+            st.markdown("### Warum hat das Modell so entschieden?")
+
+            hotspot_text = describe_hotspot(cam, box_xyxy, class_ids, result.names)
+            if hotspot_text:
+                st.markdown(hotspot_text)
+
+            cam_col1, cam_col2 = st.columns(2, gap="large")
+            with cam_col1:
+                st.image(overlay_img, use_column_width=True, caption="Entscheidungs-Overlay")
+            with cam_col2:
+                st.image(heatmap_img, use_column_width=True, caption="Reine Heatmap")
+
+            _, legend_col, _ = st.columns([1, 2, 1])
+            with legend_col:
+                st.image(colorbar_legend(), use_column_width=True)
+                label_a, label_b = st.columns(2)
+                label_a.markdown(
+                    "<span style='font-size:0.8rem;color:#6c757d'>weniger relevant</span>",
+                    unsafe_allow_html=True,
+                )
+                label_b.markdown(
+                    "<span style='font-size:0.8rem;color:#6c757d;float:right'>stark relevant</span>",
+                    unsafe_allow_html=True,
+                )
+
             st.caption(
-                "Die Heatmap (EigenCAM) zeigt, welche Bildregionen die stärksten "
-                "Aktivierungen im Backbone des Modells auslösen – ein Blick in die "
-                "„Gedanken“ des neuronalen Netzes."
+                "Die Heatmap (Grad-CAM) zeigt, welche Bereiche der erkannten Fahrzeuge am "
+                "stärksten für die jeweils vorhergesagte Klasse gesprochen haben — also die "
+                "tatsächliche Evidenz hinter der Entscheidung, nicht nur generische "
+                "Bildaktivität. Die weiß umrandete Kontur markiert die 15 % einflussreichsten "
+                "Bereiche."
+            )
+        elif box_xyxy is not None:
+            st.info(
+                "Für die Heatmap konnte keine Erklärung berechnet werden "
+                "(z. B. weil die erkannten Boxen außerhalb des Modellrasters liegen)."
             )
 
     st.divider()
-    st.markdown("### 📋 Erkennungs-Details")
+    st.markdown("### Erkennungs-Details")
 
     if boxes is None or len(boxes) == 0:
         st.info("Keine Fahrzeuge erkannt. Probiere einen niedrigeren Konfidenz-Schwellwert.")
@@ -329,13 +497,12 @@ if uploaded:
             cls_name = result.names[cls_id] if cls_id < len(result.names) else f"Klasse {cls_id}"
             info     = CLASS_INFO.get(cls_name, {})
             color    = info.get("color", "#333")
-            emoji    = info.get("emoji", "🚌")
 
             with det_cols[i % 3]:
                 bar_w = int(conf_val * 100)
                 st.markdown(f"""
                 <div class="detection-card">
-                  <span class="class-badge" style="background:{color}">{emoji} {cls_name}</span>
+                  <span class="class-badge" style="background:{color}">{cls_name}</span>
                   <div style="font-size:1.4rem;font-weight:700;font-family:'Space Mono',monospace">
                     {conf_val:.1%}
                   </div>
@@ -346,7 +513,7 @@ if uploaded:
                     {info.get('desc','') }
                   </p>
                   <p style="font-size:0.8rem;color:#888;font-style:italic">
-                    💡 {info.get('fun_fact','')}
+                    Wissenswert: {info.get('fun_fact','')}
                   </p>
                 </div>
                 """, unsafe_allow_html=True)
@@ -356,7 +523,7 @@ if uploaded:
         buf = io.BytesIO()
         Image.fromarray(ann_img).save(buf, format="JPEG", quality=95)
         st.download_button(
-            label    = "💾 Annotiertes Bild herunterladen",
+            label    = "Annotiertes Bild herunterladen",
             data     = buf.getvalue(),
             file_name= "fleet_spotter_result.jpg",
             mime     = "image/jpeg",
@@ -366,8 +533,7 @@ else:
     # Placeholder / instructions
     st.markdown("""
     <div style="text-align:center;padding:3rem;border:2px dashed #dee2e6;border-radius:12px;color:#adb5bd">
-      <div style="font-size:3rem">🚋</div>
-      <p style="font-size:1.1rem;margin-top:1rem">
+      <p style="font-size:1.1rem;margin-top:0">
         Bild hochladen, um die Erkennung zu starten
       </p>
       <p style="font-size:0.85rem">
