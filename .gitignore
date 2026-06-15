@@ -21,8 +21,8 @@ env/
 *.torchscript
 *.tflite
 *.pb
-# Track only the committed baseline weights
-!model/runs/fleet_spotter_baseline/weights/best.pt
+# Track only the committed best weights
+!model/runs/fleet_spotter_standard2/weights/best.pt
 data/**/*.cache
 
 # Data (large files — use DVC or download separately)

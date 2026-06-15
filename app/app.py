@@ -355,37 +355,6 @@ def render_cam(img_rgb, cam, alpha=0.45, highlight_quantile=0.85):
     return heatmap, overlay
 
 
-# 3x3 grid of region names within a vehicle's bounding box, (row, col) -> label.
-_HOTSPOT_POSITIONS = {
-    (0, 0): "oben links",  (0, 1): "oben",          (0, 2): "oben rechts",
-    (1, 0): "links",       (1, 1): "in der Mitte",  (1, 2): "rechts",
-    (2, 0): "unten links", (2, 1): "unten",         (2, 2): "unten rechts",
-}
-
-
-def describe_hotspot(cam, boxes_xyxy, class_ids, names):
-    """Generates a short sentence naming the vehicle and the region within its
-    bounding box (e.g. "oben rechts") where the Grad-CAM heatmap is hottest -
-    a plain-text translation of what the heatmap shows."""
-    if cam.max() <= 1e-8:
-        return None
-
-    py, px = np.unravel_index(np.argmax(cam), cam.shape)
-
-    for (x1, y1, x2, y2), cls_id in zip(boxes_xyxy, class_ids):
-        if x1 <= px <= x2 and y1 <= py <= y2:
-            col = min(int((px - x1) / max(x2 - x1, 1e-6) * 3), 2)
-            row = min(int((py - y1) / max(y2 - y1, 1e-6) * 3), 2)
-            position = _HOTSPOT_POSITIONS[(row, col)]
-            cls_name = names.get(int(cls_id), f"Klasse {int(cls_id)}")
-            return (
-                f"Die stärkste Evidenz für **{cls_name}** liegt im Bereich "
-                f"**{position}** des Fahrzeugs."
-            )
-
-    return None
-
-
 def colorbar_legend(width=400, height=22):
     """Horizontal gradient bar matching the CAM colormap, used as a legend."""
     gradient = np.tile(np.linspace(0, 255, width, dtype=np.uint8), (height, 1))
@@ -447,10 +416,6 @@ if uploaded:
 
             st.divider()
             st.markdown("### Warum hat das Modell so entschieden?")
-
-            hotspot_text = describe_hotspot(cam, box_xyxy, class_ids, result.names)
-            if hotspot_text:
-                st.markdown(hotspot_text)
 
             cam_col1, cam_col2 = st.columns(2, gap="large")
             with cam_col1:
