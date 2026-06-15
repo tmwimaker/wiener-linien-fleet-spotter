@@ -1,11 +1,11 @@
 task: detect
 mode: train
-model: yolov8n.pt
+model: yolov8s.pt
 data: C:\wiener-linien-fleet-spotter\data\dataset.yaml
-epochs: 50
+epochs: 100
 time: null
 patience: 15
-batch: 16
+batch: 32
 imgsz: 640
 save: true
 save_period: -1
@@ -13,7 +13,7 @@ cache: false
 device: null
 workers: 8
 project: C:\wiener-linien-fleet-spotter\model\runs
-name: fleet_spotter_standard2
+name: fleet_spotter_intensiv
 exist_ok: false
 pretrained: true
 optimizer: auto
@@ -103,4 +103,4 @@ erasing: 0.4
 crop_fraction: 1.0
 cfg: null
 tracker: botsort.yaml
-save_dir: C:\wiener-linien-fleet-spotter\model\runs\fleet_spotter_standard2
+save_dir: C:\wiener-linien-fleet-spotter\model\runs\fleet_spotter_intensiv
