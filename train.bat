@@ -45,7 +45,7 @@ goto run
 set MODEL=yolov8s.pt
 set EPOCHS=100
 set BATCH=32
-set NAME=fleet_spotter_intensiv
+set NAME=fleet_spotter_intensive
 goto run
 
 :run

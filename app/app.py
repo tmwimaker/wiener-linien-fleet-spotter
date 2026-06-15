@@ -7,7 +7,9 @@ Run:
     streamlit run app/app.py
 """
 
+import csv
 import io
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -18,6 +20,10 @@ from PIL import Image
 import numpy as np
 import cv2
 import torch
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "scripts"))
+from dataset_info import dataset_commits, dataset_size_at
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -127,7 +133,7 @@ st.markdown("""
 
 
 # ── Trained-run discovery ─────────────────────────────────────────────────────
-RUNS_DIR = Path(__file__).parent.parent / "model" / "runs"
+RUNS_DIR = ROOT / "model" / "runs"
 
 
 def list_trained_runs():
@@ -139,18 +145,45 @@ def list_trained_runs():
     )
 
 
+def completed_epochs(run_dir):
+    """Number of epochs actually completed, from results.csv (None if unavailable)."""
+    results_csv = run_dir / "results.csv"
+    if not results_csv.exists():
+        return None
+    with open(results_csv) as f:
+        rows = list(csv.reader(f))
+    if len(rows) < 2:
+        return None
+    return int(float(rows[-1][0]))
+
+
 def run_label(weights_path):
-    args_file = weights_path.parent.parent / "args.yaml"
-    run_name = weights_path.parent.parent.name
+    run_dir = weights_path.parent.parent
+    args_file = run_dir / "args.yaml"
+    run_name = run_dir.name
     date_str = datetime.fromtimestamp(weights_path.stat().st_mtime).strftime("%d.%m.%Y")
-    if args_file.exists():
-        with open(args_file) as f:
-            a = yaml.safe_load(f)
-        model = str(a.get("model", "?")).replace(".pt", "")
-        epochs = a.get("epochs", "?")
-        batch = a.get("batch", "?")
-        return f"{run_name}  ·  {model}, {epochs} ep, batch {batch}  ·  {date_str}"
-    return f"{run_name}  ·  {date_str}"
+    if not args_file.exists():
+        return f"{run_name}  ·  {date_str}"
+    with open(args_file) as f:
+        a = yaml.safe_load(f)
+    model = str(a.get("model", "?")).replace(".pt", "")
+    configured_epochs = a.get("epochs", "?")
+    done = completed_epochs(run_dir)
+    epochs_label = f"{done}/{configured_epochs}" if done is not None and done != configured_epochs else configured_epochs
+    batch = a.get("batch", "?")
+    return f"{run_name}  ·  {model}, {epochs_label} ep, batch {batch}  ·  {date_str}"
+
+
+@st.cache_data
+def _dataset_commits():
+    return dataset_commits()
+
+
+@st.cache_data
+def run_dataset_size(args_yaml_mtime):
+    """Total annotated images in the dataset state in effect at the given mtime."""
+    run_time = datetime.fromtimestamp(args_yaml_mtime).astimezone()
+    return sum(dataset_size_at(run_time, _dataset_commits()).values())
 
 
 # ── Grad-CAM detail-level options ─────────────────────────────────────────────
@@ -168,15 +201,42 @@ with st.sidebar:
     st.markdown("## Einstellungen")
 
     trained_runs = list_trained_runs()
-    run_choices = {run_label(w): w for w in trained_runs}
-    demo_label = "Demo (Basis-YOLOv8n, untrainiert)"
-    run_labels = [demo_label] + list(run_choices.keys())
+
+    runs_info = []
+    for w in trained_runs:
+        run_dir = w.parent.parent
+        args_file = run_dir / "args.yaml"
+        mtime = (args_file if args_file.exists() else run_dir).stat().st_mtime
+        configured_epochs = 0
+        if args_file.exists():
+            with open(args_file) as f:
+                configured_epochs = yaml.safe_load(f).get("epochs", 0)
+        runs_info.append({
+            "weights": w,
+            "label": run_label(w),
+            "epochs": configured_epochs,
+            "total_imgs": run_dataset_size(mtime),
+        })
+
+    latest_runs, older_runs = [], []
+    if runs_info:
+        latest_imgs = max(r["total_imgs"] for r in runs_info)
+        latest_runs = sorted((r for r in runs_info if r["total_imgs"] == latest_imgs), key=lambda r: -r["epochs"])
+        older_runs = sorted((r for r in runs_info if r["total_imgs"] != latest_imgs), key=lambda r: -r["epochs"])
+
+    run_choices = {}
+    for r in latest_runs:
+        run_choices[f"Aktueller Datensatz ({r['total_imgs']} Bilder)  ·  {r['label']}"] = r["weights"]
+    run_choices["Demo (Basis-YOLOv8n, untrainiert)"] = None
+    for r in older_runs:
+        run_choices[f"Vorheriger Datensatz ({r['total_imgs']} Bilder)  ·  {r['label']}"] = r["weights"]
+
     selected_run = st.selectbox(
-        "Trainings-Run", run_labels,
-        index=1 if run_choices else 0,
+        "Trainings-Run", list(run_choices.keys()),
+        index=0,
         help="Wähle, welches trainierte Modell für die Erkennung verwendet werden soll.",
     )
-    weights_path = run_choices.get(selected_run)
+    weights_path = run_choices[selected_run]
 
     st.divider()
     conf_thresh = st.slider("Konfidenz-Schwellwert", 0.1, 0.95, 0.30, 0.05,

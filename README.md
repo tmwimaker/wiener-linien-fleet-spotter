@@ -8,7 +8,7 @@
 
 ## Projektübersicht
 
-Der **Wiener Linien Fleet Spotter** ist ein prototypisches Computer-Vision-System, das Fahrzeuge des Wiener öffentlichen Nahverkehrs nicht nur erkennt, sondern bis auf die spezifische **Baureihe und Fahrzeuggeneration** klassifiziert. Das Modell basiert auf **YOLOv8 mit Transfer Learning** und wird auf einem eigens annotierten Datensatz von Wiener Linien-Fahrzeugen fine-getuned.
+Der **Wiener Linien Fleet Spotter** ist ein prototypisches Computer-Vision-System, das Schienenfahrzeuge des Wiener öffentlichen Nahverkehrs nicht nur erkennt, sondern bis auf die spezifische **Baureihe und Fahrzeuggeneration** klassifiziert. Das Modell basiert auf **YOLOv8 mit Transfer Learning** und wird auf einem eigens annotierten Datensatz von Wiener Linien-Fahrzeugen fine-getuned.
 
 ### Zielklassen
 
@@ -55,7 +55,12 @@ streamlit run app/app.py
 Browser öffnet sich automatisch auf `http://localhost:8501`.
 Ein Bild hochladen → Fahrzeuge werden erkannt und klassifiziert.
 
-In der Seitenleiste lässt sich zusätzlich eine **Erklärbarkeits-Heatmap** (Grad-CAM) einblenden: Für jedes erkannte Fahrzeug wird per Backpropagation ermittelt, welche Bildbereiche am stärksten für seine vorhergesagte Klasse gesprochen haben – also die tatsächliche Evidenz hinter der Entscheidung. Dargestellt als Entscheidungs-Overlay und reine Heatmap, inklusive Konturmarkierung der einflussreichsten Bereiche und einstellbarer Intensität.
+In der Seitenleiste stehen folgende Einstellungen zur Verfügung:
+
+- **Trainings-Run**: Auswahl, welches trainierte Modell (`model/runs/*/weights/best.pt`) für die Erkennung verwendet wird – inkl. Modellgröße, Epochenzahl, Batch-Size und Datum je Run. Ohne trainierten Run läuft die App im Demo-Modus.
+- **Konfidenz-/IoU-Schwellwert**: Steuern Mindestvertrauen und Non-Maximum-Suppression der Erkennungen.
+- **Label-/Konfidenz-Anzeige**: Ein-/Ausblenden von Klassennamen und Wahrscheinlichkeiten auf dem Bild.
+- **Erklärbarkeits-Heatmap (Grad-CAM)**: Für jedes erkannte Fahrzeug wird per Backpropagation ermittelt, welche Bildbereiche am stärksten für seine vorhergesagte Klasse gesprochen haben – also die tatsächliche Evidenz hinter der Entscheidung. Dargestellt als Entscheidungs-Overlay und reine Heatmap, inklusive Konturmarkierung der einflussreichsten Bereiche, einstellbarer Intensität und wählbarem Detailgrad (feine P3- bis grobe P5-Feature-Ebenen).
 
 > **Hinweis:** Ohne trainiertes Modell läuft die App im *Demo-Modus* mit einem allgemeinen YOLOv8-Modell. Die Wiener-Linien-Klassen werden erst nach dem Training erkannt.
 
@@ -75,7 +80,7 @@ data/
 │   ├── train/
 │   │   ├── images/   # *.jpg, *.png
 │   │   └── labels/   # *.txt (YOLO format)
-│   ├── val/
+│   ├── valid/
 │   └── test/
 └── dataset.yaml      # Klassen-Konfiguration
 ```
@@ -115,6 +120,38 @@ python scripts/evaluate.py
 jupyter notebook notebooks/eda_annotation_check.ipynb
 ```
 
+### 6 · Trainings-Läufe vergleichen
+
+```bash
+python scripts/compare_runs.py
+```
+
+Stellt alle abgeschlossenen Runs in `model/runs/` (mind. `MIN_EPOCHS` durchlaufene Epochen) gegenüber – inkl. Modell, Epochenzahl, Datensatzgröße zum jeweiligen Trainingszeitpunkt (rekonstruiert aus der Git-Historie von `data/annotated/`) und den finalen Metriken (Precision, Recall, mAP50, mAP50-95). Ergebnis:
+
+- `model/runs/comparison.csv` – Tabelle aller Runs
+- `model/runs/comparison.png` – Diagramm „Datensatzgröße vs. Modellgüte"
+
+Damit lässt sich der Projektfortschritt nachvollziehen, von kleinen, schnellen Testläufen bis zum finalen Modell.
+
+---
+
+## Ergebnisse
+
+Aktueller Stand der Trainings-Runs (siehe `model/runs/comparison.csv`):
+
+| Run | Modell | Epochen | Datensatz | Bilder gesamt | Precision | Recall | mAP50 | mAP50-95 |
+|---|---|---|---|---|---|---|---|---|
+| `fleet_spotter_baseline` | yolov8s | 20/100 (abgebrochen) | vorherig | 265 | 0,385 | 0,538 | 0,470 | 0,279 |
+| `fleet_spotter_quick` | yolov8n | 5/5 | aktuell | 541 | 0,687 | 0,649 | 0,728 | 0,583 |
+| `fleet_spotter_standard` | yolov8n | 50/50 | aktuell | 541 | 0,930 | 0,930 | 0,965 | 0,806 |
+| `fleet_spotter_intensive` | yolov8s | 87/100 | aktuell | 541 | 0,951 | 0,935 | 0,973 | 0,812 |
+
+Der Vergleich zeigt deutlich den Effekt des erweiterten Datensatzes und der Trainingsdauer: Mit nur 265 annotierten Bildern (vor dem Commit „new data") erreichte selbst ein 20-Epochen-Lauf nur mAP50 = 0,470. Nach Erweiterung auf 541 Bilder reicht schon ein kurzer 5-Epochen-Lauf (`fleet_spotter_quick`) für mAP50 = 0,728 – mit mehr Epochen steigt der Wert auf bis zu **0,973** (`fleet_spotter_intensive`, YOLOv8s, 87/100 Epochen, mAP50-95 = 0,812), dem aktuell besten Modell und der Standardauswahl in der Demo-App.
+
+In der App lassen sich alle vier Runs über die Sidebar auswählen, gruppiert nach Datensatzversion ("Aktueller Datensatz" / "Vorheriger Datensatz").
+
+![Trainings-Fortschritt: Datensatzgröße vs. Modellgüte](model/runs/comparison.png)
+
 ---
 
 ## Projektstruktur
@@ -128,13 +165,17 @@ wiener-linien-fleet-spotter/
 │   ├── augmented/              # Augmentierte Bilder (gitignored)
 │   └── dataset.yaml            # YOLO-Datensatz-Konfiguration
 ├── model/
-│   └── runs/                   # Trainings-Output (gitignored)
+│   └── runs/                   # Trainings-Output (Gewichte gitignored, außer best.pt)
+│       ├── comparison.csv      # Tabelle aller Trainings-Runs
+│       └── comparison.png      # Diagramm: Datensatzgröße vs. Modellgüte
 ├── notebooks/
 │   └── eda_annotation_check.ipynb
 ├── scripts/
 │   ├── train.py                # Training
 │   ├── evaluate.py             # Evaluierung
-│   └── augment.py              # Offline-Augmentierung
+│   ├── augment.py              # Offline-Augmentierung
+│   ├── compare_runs.py         # Vergleich aller Trainings-Runs
+│   └── dataset_info.py         # Helper: Datensatzgröße aus Git-Historie
 ├── assets/                     # Bilder, Logos für Dokumentation
 ├── requirements.txt
 ├── .gitignore
@@ -151,7 +192,9 @@ wiener-linien-fleet-spotter/
 | **Methode** | Transfer Learning + Fine-Tuning |
 | **Augmentierung** | Helligkeit, Kontrast, Regen, Nebel, Schatten, horizontaler Flip, leichte Rotation |
 | **Metriken** | mAP50, mAP50-95, Precision, Recall, F1 |
-| **UI** | Streamlit – Upload → Echtzeit-Inferenz mit Bounding Boxes |
+| **UI** | Streamlit – Modell-Auswahl, Upload → Echtzeit-Inferenz mit Bounding Boxes |
+| **Erklärbarkeit** | Grad-CAM-Heatmaps pro Erkennung (P3/P4/P5-Feature-Ebenen) |
+| **Run-Vergleich** | `scripts/compare_runs.py` – Tabelle & Diagramm über alle Trainings-Runs |
 
 ---
 

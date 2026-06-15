@@ -22,7 +22,10 @@ env/
 *.tflite
 *.pb
 # Track only the committed best weights
-!model/runs/fleet_spotter_standard2/weights/best.pt
+!model/runs/fleet_spotter_baseline/weights/best.pt
+!model/runs/fleet_spotter_quick/weights/best.pt
+!model/runs/fleet_spotter_standard/weights/best.pt
+!model/runs/fleet_spotter_intensive/weights/best.pt
 data/**/*.cache
 
 # Data (large files — use DVC or download separately)

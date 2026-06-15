@@ -20,7 +20,7 @@ read -p "Modus waehlen (1-3): " mode
 case "$mode" in
     1) MODEL="yolov8n.pt"; EPOCHS=5;   BATCH=16; NAME="fleet_spotter_quick"    ;;
     2) MODEL="yolov8n.pt"; EPOCHS=50;  BATCH=16; NAME="fleet_spotter_standard" ;;
-    3) MODEL="yolov8s.pt"; EPOCHS=100; BATCH=32; NAME="fleet_spotter_intensiv" ;;
+    3) MODEL="yolov8s.pt"; EPOCHS=100; BATCH=32; NAME="fleet_spotter_intensive" ;;
     *)
         echo "Ungueltige Auswahl: $mode"
         exit 1

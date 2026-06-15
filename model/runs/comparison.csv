@@ -1,3 +1,5 @@
 run,date,model,epochs,train_imgs,val_imgs,test_imgs,total_imgs,precision,recall,mAP50,mAP50-95
-fleet_spotter_quick,2026-06-11 21:40,yolov8n.pt,5/5,192,0,24,216,0.554,0.725,0.676,0.533
-fleet_spotter_standard2,2026-06-14 22:34,yolov8n.pt,50/50,374,0,63,437,0.93,0.93,0.965,0.806
+fleet_spotter_baseline,2026-06-09 07:53,yolov8s.pt,20/100,192,49,24,265,0.385,0.538,0.47,0.279
+fleet_spotter_quick,2026-06-15 20:47,yolov8n.pt,5/5,374,104,63,541,0.687,0.649,0.728,0.583
+fleet_spotter_standard,2026-06-15 18:57,yolov8n.pt,50/50,374,104,63,541,0.93,0.93,0.965,0.806
+fleet_spotter_intensive,2026-06-15 18:57,yolov8s.pt,87/100,374,104,63,541,0.951,0.935,0.973,0.812
