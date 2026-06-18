@@ -9,7 +9,7 @@ Run:
 
 import csv
 import io
-import sys
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -22,8 +22,6 @@ import cv2
 import torch
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "scripts"))
-from dataset_info import dataset_commits, dataset_size_at
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -174,16 +172,15 @@ def run_label(weights_path):
     return f"{run_name}  ·  {model}, {epochs_label} ep, batch {batch}  ·  {date_str}"
 
 
-@st.cache_data
-def _dataset_commits():
-    return dataset_commits()
+def run_image_count(run_dir):
+    """Total dataset images encoded in the run name (…-<N>img), or None if absent.
 
-
-@st.cache_data
-def run_dataset_size(args_yaml_mtime):
-    """Total annotated images in the dataset state in effect at the given mtime."""
-    run_time = datetime.fromtimestamp(args_yaml_mtime).astimezone()
-    return sum(dataset_size_at(run_time, _dataset_commits()).values())
+    The dataset size is part of the run name (naming convention
+    <label>-<epochs>ep-<images>img), so it travels with the run on any machine —
+    no git history or file-mtime guessing needed.
+    """
+    m = re.search(r"-(\d+)img$", run_dir.name)
+    return int(m.group(1)) if m else None
 
 
 # ── Grad-CAM detail-level options ─────────────────────────────────────────────
@@ -206,7 +203,6 @@ with st.sidebar:
     for w in trained_runs:
         run_dir = w.parent.parent
         args_file = run_dir / "args.yaml"
-        mtime = (args_file if args_file.exists() else run_dir).stat().st_mtime
         configured_epochs = 0
         if args_file.exists():
             with open(args_file) as f:
@@ -215,21 +211,27 @@ with st.sidebar:
             "weights": w,
             "label": run_label(w),
             "epochs": configured_epochs,
-            "total_imgs": run_dataset_size(mtime),
+            "total_imgs": run_image_count(run_dir),   # read straight from the run name
         })
 
-    latest_runs, older_runs = [], []
-    if runs_info:
-        latest_imgs = max(r["total_imgs"] for r in runs_info)
-        latest_runs = sorted((r for r in runs_info if r["total_imgs"] == latest_imgs), key=lambda r: -r["epochs"])
-        older_runs = sorted((r for r in runs_info if r["total_imgs"] != latest_imgs), key=lambda r: -r["epochs"])
+    # Order by dataset size (encoded in the run name): current dataset first, then
+    # by training length. The size is already part of each run name (…-<N>img), so
+    # the option labels lead with the run name instead of repeating "N Bilder".
+    sizes = sorted({r["total_imgs"] for r in runs_info if r["total_imgs"] is not None}, reverse=True)
+    latest_imgs = sizes[0] if sizes else None
+
+    def _is_latest(r):
+        return latest_imgs is not None and r["total_imgs"] == latest_imgs
+
+    latest_runs = sorted((r for r in runs_info if _is_latest(r)), key=lambda r: -r["epochs"])
+    older_runs = sorted((r for r in runs_info if not _is_latest(r)), key=lambda r: -r["epochs"])
 
     run_choices = {}
     for r in latest_runs:
-        run_choices[f"Aktueller Datensatz ({r['total_imgs']} Bilder)  ·  {r['label']}"] = r["weights"]
+        run_choices[r["label"]] = r["weights"]
     run_choices["Demo (Basis-YOLOv8n, untrainiert)"] = None
     for r in older_runs:
-        run_choices[f"Vorheriger Datensatz ({r['total_imgs']} Bilder)  ·  {r['label']}"] = r["weights"]
+        run_choices[r["label"]] = r["weights"]
 
     selected_run = st.selectbox(
         "Trainings-Run", list(run_choices.keys()),
@@ -304,6 +306,11 @@ model, is_trained = load_model(weights_path)
 # ── Explainability (Grad-CAM) ─────────────────────────────────────────────────
 # Feature maps feeding the Detect head (strides 8/16/32 → P3/P4/P5).
 _GRADCAM_LAYERS = (15, 18, 21)
+
+# How far the heatmap is allowed to reach beyond each detection box, as a
+# fraction of the box's longer side. The gate is feathered (not a hard cut-off),
+# so a margin of surrounding context stays visible and fades out smoothly.
+CAM_CONTEXT_MARGIN = 0.18
 
 
 def compute_gradcam(yolo_model, img_rgb, boxes_xyxy, class_ids, imgsz=640, levels=(0, 1, 2)):
@@ -385,11 +392,19 @@ def compute_gradcam(yolo_model, img_rgb, boxes_xyxy, class_ids, imgsz=640, level
             level_cam = cv2.resize(level_cam, (img_w, img_h), interpolation=cv2.INTER_CUBIC)
             box_cam = np.maximum(box_cam, level_cam)
 
-        px1, py1 = int(np.clip(x1, 0, img_w - 1)), int(np.clip(y1, 0, img_h - 1))
-        px2 = int(np.clip(round(x2), px1 + 1, img_w))
-        py2 = int(np.clip(round(y2), py1 + 1, img_h))
+        # Soft, slightly-dilated gate around the box: rather than a hard cut-off
+        # at the box edge, extend the mask by a margin and feather it, so a bit of
+        # the surrounding context (rails, catenary, platform) stays visible and
+        # fades out — instead of an abrupt rectangular boundary.
+        bw, bh = x2 - x1, y2 - y1
+        margin = max(CAM_CONTEXT_MARGIN * max(bw, bh), 6.0)
+        ex1 = int(np.clip(x1 - margin, 0, img_w - 1))
+        ey1 = int(np.clip(y1 - margin, 0, img_h - 1))
+        ex2 = int(np.clip(round(x2 + margin), ex1 + 1, img_w))
+        ey2 = int(np.clip(round(y2 + margin), ey1 + 1, img_h))
         box_mask = np.zeros((img_h, img_w), dtype=np.float32)
-        box_mask[py1:py2, px1:px2] = 1.0
+        box_mask[ey1:ey2, ex1:ex2] = 1.0
+        box_mask = cv2.GaussianBlur(box_mask, (0, 0), sigmaX=margin * 0.5)
         box_cam *= box_mask
         if box_cam.max() > 1e-8:
             box_cam /= box_cam.max()
@@ -497,11 +512,12 @@ if uploaded:
                 )
 
             st.caption(
-                "Die Heatmap (Grad-CAM) zeigt, welche Bereiche der erkannten Fahrzeuge am "
-                "stärksten für die jeweils vorhergesagte Klasse gesprochen haben — also die "
-                "tatsächliche Evidenz hinter der Entscheidung, nicht nur generische "
-                "Bildaktivität. Die weiß umrandete Kontur markiert die 15 % einflussreichsten "
-                "Bereiche."
+                "Die Heatmap (Grad-CAM) zeigt, welche Bereiche am stärksten für die jeweils "
+                "vorhergesagte Klasse gesprochen haben — also die tatsächliche Evidenz hinter "
+                "der Entscheidung, nicht nur generische Bildaktivität. Der Fokus liegt auf dem "
+                "erkannten Fahrzeug, bezieht aber einen weich auslaufenden Rand des umgebenden "
+                "Kontexts (z. B. Gleise, Oberleitung) mit ein. Die weiß umrandete Kontur "
+                "markiert die 15 % einflussreichsten Bereiche."
             )
         elif box_xyxy is not None:
             st.info(

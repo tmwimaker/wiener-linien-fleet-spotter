@@ -18,9 +18,9 @@ echo ""
 read -p "Modus waehlen (1-3): " mode
 
 case "$mode" in
-    1) MODEL="yolov8n.pt"; EPOCHS=5;   BATCH=16; NAME="fleet_spotter_quick"    ;;
-    2) MODEL="yolov8n.pt"; EPOCHS=50;  BATCH=16; NAME="fleet_spotter_standard" ;;
-    3) MODEL="yolov8s.pt"; EPOCHS=100; BATCH=32; NAME="fleet_spotter_intensive" ;;
+    1) MODEL="yolov8n.pt"; EPOCHS=5;   BATCH=16; LABEL="quick"     ;;
+    2) MODEL="yolov8n.pt"; EPOCHS=50;  BATCH=16; LABEL="standard"  ;;
+    3) MODEL="yolov8s.pt"; EPOCHS=100; BATCH=32; LABEL="intensive" ;;
     *)
         echo "Ungueltige Auswahl: $mode"
         exit 1
@@ -29,5 +29,6 @@ esac
 
 echo ""
 echo "Starte Training: $MODEL, $EPOCHS Epochen, Batch $BATCH ..."
+echo "(Run-Name wird zu <label>-<epochs>ep-<bilder>img, z. B. ${LABEL}-${EPOCHS}ep-NNNimg)"
 echo ""
-venv/bin/python scripts/train.py --model "$MODEL" --epochs "$EPOCHS" --batch "$BATCH" --name "$NAME"
+venv/bin/python scripts/train.py --model "$MODEL" --epochs "$EPOCHS" --batch "$BATCH" --label "$LABEL"

@@ -21,11 +21,10 @@ env/
 *.torchscript
 *.tflite
 *.pb
-# Track only the committed best weights
-!model/runs/fleet_spotter_baseline/weights/best.pt
-!model/runs/fleet_spotter_quick/weights/best.pt
-!model/runs/fleet_spotter_standard/weights/best.pt
-!model/runs/fleet_spotter_intensive/weights/best.pt
+# Keep the best weights of EVERY run in model/runs/ in the repo, so a fresh
+# clone has all our trained models ready and the prof never has to retrain.
+# Glob covers current and future runs automatically (last.pt stays ignored).
+!model/runs/*/weights/best.pt
 data/**/*.cache
 
 # Data (large files — use DVC or download separately)

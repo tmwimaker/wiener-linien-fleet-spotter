@@ -13,7 +13,7 @@ cache: false
 device: null
 workers: 8
 project: C:\wiener-linien-fleet-spotter\model\runs
-name: fleet_spotter_quick
+name: quick-5ep-541img
 exist_ok: false
 pretrained: true
 optimizer: auto
@@ -103,4 +103,4 @@ erasing: 0.4
 crop_fraction: 1.0
 cfg: null
 tracker: botsort.yaml
-save_dir: C:\wiener-linien-fleet-spotter\model\runs\fleet_spotter_quick
+save_dir: C:\wiener-linien-fleet-spotter\model\runs\quick-5ep-541img

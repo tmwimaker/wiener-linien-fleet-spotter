@@ -27,7 +27,7 @@ Der **Wiener Linien Fleet Spotter** ist ein prototypisches Computer-Vision-Syste
 
 ### Voraussetzungen
 
-- Python 3.10+
+- Python 3.10–3.12 (getestet mit 3.11) — **nicht** 3.13+, dafür gibt es kein passendes `torch`-Wheel
 - pip
 - *(Optional für GPU-Training: CUDA 11.8+)*
 
@@ -97,21 +97,23 @@ python scripts/augment.py --factor 3
 
 ```bash
 # Schnell (CPU / wenig VRAM): yolov8n
-python scripts/train.py --model yolov8n.pt --epochs 50
+python scripts/train.py --model yolov8n.pt --epochs 50 --label standard
 
 # Besser (GPU empfohlen): yolov8s oder yolov8m
-python scripts/train.py --model yolov8s.pt --epochs 100 --batch 32
+python scripts/train.py --model yolov8s.pt --epochs 100 --batch 32 --label intensive
 ```
 
-Trainings-Artefakte (Gewichte, Metriken, Plots) landen in:
-`model/runs/fleet_spotter_v1/`
+Der Run-Name wird automatisch nach dem Schema `<label>-<epochen>ep-<bilder>img`
+gebildet (z. B. `standard-50ep-541img`) – die Bilderzahl wird beim Start aus dem
+aktuellen Datensatz gezählt. Trainings-Artefakte (Gewichte, Metriken, Plots) landen in:
+`model/runs/<label>-<epochen>ep-<bilder>img/`
 
 ### 4 · Evaluierung
 
 ```bash
 python scripts/evaluate.py
 # → druckt per-Klasse AP50, mAP50-95, F1-Score
-# → speichert model/runs/fleet_spotter_v1/evaluation_report.txt
+# → speichert model/runs/<run-name>/evaluation_report.txt
 ```
 
 ### 5 · EDA & visuelle Inspektion
@@ -141,14 +143,14 @@ Aktueller Stand der Trainings-Runs (siehe `model/runs/comparison.csv`):
 
 | Run | Modell | Epochen | Datensatz | Bilder gesamt | Precision | Recall | mAP50 | mAP50-95 |
 |---|---|---|---|---|---|---|---|---|
-| `fleet_spotter_baseline` | yolov8s | 20/100 (abgebrochen) | vorherig | 265 | 0,385 | 0,538 | 0,470 | 0,279 |
-| `fleet_spotter_quick` | yolov8n | 5/5 | aktuell | 541 | 0,687 | 0,649 | 0,728 | 0,583 |
-| `fleet_spotter_standard` | yolov8n | 50/50 | aktuell | 541 | 0,930 | 0,930 | 0,965 | 0,806 |
-| `fleet_spotter_intensive` | yolov8s | 87/100 | aktuell | 541 | 0,951 | 0,935 | 0,973 | 0,812 |
+| `baseline-100ep-265img` | yolov8s | 20/100 (abgebrochen) | vorherig | 265 | 0,385 | 0,538 | 0,470 | 0,279 |
+| `quick-5ep-541img` | yolov8n | 5/5 | aktuell | 541 | 0,687 | 0,649 | 0,728 | 0,583 |
+| `standard-50ep-541img` | yolov8n | 50/50 | aktuell | 541 | 0,930 | 0,930 | 0,965 | 0,806 |
+| `intensive-100ep-541img` | yolov8s | 87/100 | aktuell | 541 | 0,951 | 0,935 | 0,973 | 0,812 |
 
-Der Vergleich zeigt deutlich den Effekt des erweiterten Datensatzes und der Trainingsdauer: Mit nur 265 annotierten Bildern (vor dem Commit „new data") erreichte selbst ein 20-Epochen-Lauf nur mAP50 = 0,470. Nach Erweiterung auf 541 Bilder reicht schon ein kurzer 5-Epochen-Lauf (`fleet_spotter_quick`) für mAP50 = 0,728 – mit mehr Epochen steigt der Wert auf bis zu **0,973** (`fleet_spotter_intensive`, YOLOv8s, 87/100 Epochen, mAP50-95 = 0,812), dem aktuell besten Modell und der Standardauswahl in der Demo-App.
+Der Vergleich zeigt deutlich den Effekt des erweiterten Datensatzes und der Trainingsdauer: Mit nur 265 annotierten Bildern (vor dem Commit „new data") erreichte selbst ein 20-Epochen-Lauf nur mAP50 = 0,470. Nach Erweiterung auf 541 Bilder reicht schon ein kurzer 5-Epochen-Lauf (`quick-5ep-541img`) für mAP50 = 0,728 – mit mehr Epochen steigt der Wert auf bis zu **0,973** (`intensive-100ep-541img`, YOLOv8s, 87/100 Epochen, mAP50-95 = 0,812), dem aktuell besten Modell und der Standardauswahl in der Demo-App.
 
-In der App lassen sich alle vier Runs über die Sidebar auswählen, gruppiert nach Datensatzversion ("Aktueller Datensatz" / "Vorheriger Datensatz").
+In der App lassen sich alle vier Runs über die Sidebar auswählen. Die Datensatzgröße steht direkt im Run-Namen (z. B. `…-541img`); die Liste ist nach Datensatzversion sortiert (aktueller Datensatz zuerst, dann der vorherige).
 
 ![Trainings-Fortschritt: Datensatzgröße vs. Modellgüte](model/runs/comparison.png)
 

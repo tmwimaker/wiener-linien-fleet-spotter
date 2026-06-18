@@ -31,27 +31,28 @@ exit /b 1
 set MODEL=yolov8n.pt
 set EPOCHS=5
 set BATCH=16
-set NAME=fleet_spotter_quick
+set LABEL=quick
 goto run
 
 :standard
 set MODEL=yolov8n.pt
 set EPOCHS=50
 set BATCH=16
-set NAME=fleet_spotter_standard
+set LABEL=standard
 goto run
 
 :intensive
 set MODEL=yolov8s.pt
 set EPOCHS=100
 set BATCH=32
-set NAME=fleet_spotter_intensive
+set LABEL=intensive
 goto run
 
 :run
 echo.
 echo Starte Training: %MODEL%, %EPOCHS% Epochen, Batch %BATCH% ...
+echo (Run-Name wird zu ^<label^>-^<epochs^>ep-^<bilder^>img, z. B. %LABEL%-%EPOCHS%ep-NNNimg)
 echo.
-venv\Scripts\python.exe scripts\train.py --model %MODEL% --epochs %EPOCHS% --batch %BATCH% --name %NAME%
+venv\Scripts\python.exe scripts\train.py --model %MODEL% --epochs %EPOCHS% --batch %BATCH% --label %LABEL%
 
 pause
